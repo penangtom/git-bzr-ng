@@ -471,6 +471,9 @@ def cmd_import(args):
 def cmd_clear(args):
   parser = optparse.OptionParser(usage='git bzr clear [<bzr_branch>]')
   parser.description = ('Clear all information for a given bzr branch')
+  parser.add_option('--format', action='store', dest='parent_format',
+                    default=DEFAULT_FORMAT,
+                    help='use this format for the local repo')
   (options, args) = parser.parse_args(args)
 
   cl = Changelist()
