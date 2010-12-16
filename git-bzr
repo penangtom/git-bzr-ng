@@ -12,6 +12,7 @@ import sys
 
 
 NAMESPACE = 'bzr'
+DEFAULT_FORMAT = 'default'
 
 
 def die(message, *args):
@@ -234,7 +235,7 @@ def export_git(branch, cl=None, parent_branch=None):
     rewrite_bzr_marks_file(bzr_parent_marks)
     bzr_import_arg = ['--import-marks=%s' % bzr_parent_marks]
     git_import_arg = ['--import-marks=%s' % git_parent_marks]
-  
+
   # NOTE(termie): this happens in reverse because we're piping
   bzr_proc = bzr(['fast-import'] + bzr_import_arg + [
                   '--export-marks=%s' % bzr_marks,
@@ -254,14 +255,17 @@ def export_git(branch, cl=None, parent_branch=None):
   bzr_proc.wait()
 
 
-def init_repo(cl=None):
+def init_repo(cl=None, fmt=None):
   if cl is None:
     cl = Changelist()
 
   if not os.path.exists(cl.bzr_dir()):
     os.makedirs(cl.bzr_dir())
+    args=['init-repo', '--no-trees']
+    if fmt is not None:
+        args.append('--format=%s' % fmt)
     # Initialize a bzr repo
-    bzr(['init-repo', '--no-trees', cl.bzr_dir()])
+    bzr(args + [cl.bzr_dir()])
 
   if not os.path.exists(cl.map_dir()):
     os.makedirs(cl.map_dir())
@@ -270,6 +274,9 @@ def init_repo(cl=None):
 def cmd_clone(args):
   parser = optparse.OptionParser(usage='git bzr clone <url> [<target>]')
   parser.description = ('Effectively a bzr branch <url>')
+  parser.add_option('--format', action='store', dest='parent_format',
+                    default=DEFAULT_FORMAT,
+                    help='use this format for the local repo')
   (options, args) = parser.parse_args(args)
 
   # TODO(termie): command-line validation
@@ -297,7 +304,7 @@ def cmd_clone(args):
   cl = Changelist()
 
   # Ensure our directories exist
-  init_repo(cl)
+  init_repo(cl, options.parent_format)
 
   cmd_import([url, branch])
 
@@ -310,12 +317,15 @@ def cmd_push(args):
   parser.add_option('--parent_branch', action='store', dest='parent_branch',
                     default='master',
                     help='use this branch as the parent branch')
+  parser.add_option('--format', action='store', dest='parent_format',
+                    default=DEFAULT_FORMAT,
+                    help='use this format for the local repo')
   (options, args) = parser.parse_args(args)
 
   cl = Changelist()
 
   # Ensure our directories exist
-  init_repo(cl)
+  init_repo(cl, options.parent_format)
 
   upstream = None
   if len(args):
@@ -360,7 +370,7 @@ def cmd_push(args):
   os.chdir(cl.bzr_dir(branch))
   bzr(['push', upstream])
   os.chdir(root)
-  
+
   # if this is out first time, make the tracking branch
   if not known_upstream:
     git(['branch', bzr_ref, branch])
@@ -374,12 +384,15 @@ def cmd_sync(args):
   parser.description = ('Sync a bzr tracking branch (bzr/*) with remote')
   parser.add_option('--overwrite', action='store_true', dest='overwrite',
                     help='overwrite tracking branch with remote copy')
+  parser.add_option('--format', action='store', dest='parent_format',
+                    default=DEFAULT_FORMAT,
+                    help='use this format for the local repo')
   (options, args) = parser.parse_args(args)
 
   cl = Changelist()
 
   # Ensure our directories exist
-  init_repo(cl)
+  init_repo(cl, options.parent_format)
 
   bzr_ref = None
   if len(args):
@@ -411,6 +424,9 @@ def cmd_sync(args):
 def cmd_import(args):
   parser = optparse.OptionParser(usage='git bzr import <url> <new_branch>')
   parser.description = ('Effectively a bzr branch <url>, but git-style')
+  parser.add_option('--format', action='store', dest='parent_format',
+                    default=DEFAULT_FORMAT,
+                    help='use this format for the local repo')
   (options, args) = parser.parse_args(args)
 
   # TODO(termie): command-line validation
@@ -430,7 +446,7 @@ def cmd_import(args):
   cl = Changelist()
 
   # Ensure our directories exist
-  init_repo(cl)
+  init_repo(cl, options.parent_format)
 
   if branch_exists(branch):
     die('Branch already exists: %s', branch)
@@ -474,7 +490,7 @@ def cmd_clear(args):
   if not bzr_ref:
     die('No bzr tracking information associated with this branch,'
         'which bzr tracking branch do you want to clear?')
-  
+
   upstream = get_cfg('%s.upstream' % bzr_ref)
   if upstream:
     clear_cfg('%s.upstream' % bzr_ref)
@@ -486,7 +502,7 @@ def cmd_clear(args):
 
   if os.path.exists(branch_dir):
     shutil.rmtree(branch_dir)
-  
+
   for map_file in (git_maps, bzr_maps):
     if os.path.exists(map_file):
       os.unlink(map_file)
